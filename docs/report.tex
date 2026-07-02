@@ -1,0 +1,143 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[expansion=false]{microtype}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{ink}{HTML}{15233B}
+\definecolor{accent}{HTML}{1D5F9E}
+\definecolor{rule}{HTML}{C7D2E0}
+
+\captionsetup{font=small,labelfont={bf,color=accent},labelsep=period}
+\titleformat{\section}{\large\bfseries\color{ink}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+\titlespacing{\section}{0pt}{1.4em}{0.5em}
+\color{ink}
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0pt}
+
+\newcommand{\bs}{\mathbf{s}}
+\newcommand{\bx}{\mathbf{x}}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries\color{ink} Simulating a Photonic Ising Machine for Max\text{-}Cut}\\[0.35em]
+{\large\color{accent} A dynamical\text{-}systems model of the cascaded\text{-}modulator architecture, with a classical output layer}\\[0.8em]
+{\normalsize Samarth \,\textbf{$\cdot$}\, BS--MS Physics, IISER Mohali}\\[0.2em]
+{\small\itshape After Abdul\text{-}Rahim \textit{et al.}, ``Programmable 200\,GOPS Hopfield\text{-}inspired photonic Ising machine,'' \textit{Nature} (2025).}
+\end{center}
+
+\vspace{0.4em}
+\hrule height 0.6pt
+\vspace{0.9em}
+
+\noindent\textbf{Summary.}\; A photonic Ising machine computes by letting light relax, not by clocking logic gates: it encodes a combinatorial problem as an energy and reads the answer off the state the physical system settles into. This note builds that idea from the laser outward, maps every physical stage of the cascaded\text{-}modulator machine onto a compact simulator written from scratch in NumPy, and shows that a cheap classical \emph{output layer}---greedy local search on the machine's raw output---closes the few\text{-}percent gap that the analog core leaves behind, reaching the best\text{-}known cut on every run and beating simulated annealing on time\text{-}to\text{-}solution.
+
+\section{The problem, as an energy}
+
+\textbf{Max\text{-}Cut.} Given a weighted graph, split its vertices into two sides so that the total weight of edges crossing between the sides is as large as possible. Assign each vertex a spin $s_i\in\{-1,+1\}$ naming its side. For a single edge, $\tfrac{1}{2}(1-s_is_j)$ is $1$ when the endpoints differ and $0$ when they agree, so the cut is
+\begin{equation}
+\mathrm{cut}(\bs)=\tfrac14\sum_{i,j} W_{ij}\,(1-s_is_j)
+=\tfrac12\!\sum_{\text{edges}}\! w_{ij}\;-\;\tfrac14\,\bs^{\!\top} W\bs,
+\end{equation}
+where $W$ is the symmetric weighted adjacency matrix. The first term is constant, so \emph{maximising the cut is exactly minimising} $\bs^{\!\top} W\bs$, i.e.\ minimising the Ising energy
+\begin{equation}
+E(\bs)=\tfrac12\,\bs^{\!\top} W\bs \;=\; -\tfrac12\sum_{i,j} J_{ij}\,s_is_j,\qquad J_{ij}=-\,W_{ij}.
+\end{equation}
+The negative sign is the whole content of the mapping: positive edge weights become \emph{antiferromagnetic} couplings, so every edge wants its two spins on opposite sides---to be cut. An odd cycle cannot satisfy all its edges at once (three mutually antiferromagnetic bonds are frustrated), which is precisely why a triangle's maximum cut is $2$ of $3$. Any Ising machine that finds the ground state of $E$ therefore returns the maximum cut.
+
+\section{The machine: how light becomes a spin}
+
+The hardware minimises $E$ physically. The idea is cleanest in the canonical measurement\text{-}feedback machine, which we build first; the paper's machine is the same loop with two components swapped.
+
+\subsection{The archetype}
+
+\textbf{Light $\to$ spin.} The key element is a degenerate optical parametric oscillator (OPO): pump a nonlinear crystal at frequency $2\omega$ and it emits light at $\omega$ that is forced to lock to one of exactly two phases, $0$ or $\pi$. That binary is the spin: phase $0\equiv+1$, phase $\pi\equiv-1$. The OPO is a double\text{-}well made of light---it forbids the ``undecided'' state and pushes each pulse to $\pm$.
+
+\textbf{Many spins from one crystal.} A pulsed laser sends a train of pulses around a long fibre loop containing the crystal; many pulses circulate at once in separate time slots, each passing through the \emph{same} crystal in turn. $N$ time slots $=N$ spins. This time\text{-}multiplexing is why the architecture scales.
+
+\textbf{Coupling, threshold, noise, readout.} The pulses cannot touch, so coupling is done by measurement and feedback: a sliver of each pulse is measured, an FPGA holding $J$ computes the local field $\sum_j J_{ij}c_j$, and injects it back into slot $i$. The pump is then ramped through the OPO threshold; the phase pattern that switches on first is the one that oscillates with least loss, which---by construction of the couplings---is the minimum\text{-}energy Ising configuration. Vacuum noise keeps the system exploring rather than snapping into the first mediocre state: noise \emph{is} the annealing. When the pattern stabilises, the final phases are measured, giving the spins.
+
+\subsection{The paper's machine: the cascaded\text{-}modulator Ising machine}
+
+The paper realises the same loop at room temperature with the OPO crystal removed and its two jobs---\emph{be a spin} and \emph{provide gain}---split across separate components. A continuous\text{-}wave laser supplies a bare carrier; the $N$ spins are written as a time\text{-}multiplexed electrical waveform. Cascaded thin\text{-}film lithium\text{-}niobate (TFLN) modulators imprint that waveform on the light and, through their sinusoidal electro\text{-}optic transfer function, supply the \emph{nonlinearity} that squashes each spin toward $\pm$. A quantum\text{-}dot semiconductor optical amplifier provides loop gain. A photodetector measures the returning symbols, and a digital signal\text{-}processing (DSP) engine computes the coupling $\sum_j J_{ij}s_j$, compensates high\text{-}baud\text{-}rate signal impairments (telecom DSP folded into the computation---the architecture's central novelty), and lets the loop's own noise serve as annealing. The result is a stable, room\text{-}temperature loop supporting $256$ fully\text{-}connected spins at a projected $>200$ giga\text{-}operations per second.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Physical stage} & \textbf{Role} & \textbf{Term in the simulator}\\
+\midrule
+CW laser + AWG & carrier, write $N$ time\text{-}slot spins & the state vector $\bx$\\
+Cascaded TFLN modulators & nonlinearity / bistable ``spin'' & $(p-1)x_i - x_i^3$\\
+QD SOA, loop through threshold & gain / bifurcation & pump ramp $p:\,-2\!\to\!1$\\
+Photodetector + DSP (matrix\text{-}vector) & coupling $\textstyle\sum_j J_{ij}s_j$ & $-\,c\,(W\bx)_i$\\
+DSP impairment compensation & accuracy at high speed & --- (their contribution)\\
+Intrinsic loop noise & annealing & Gaussian noise term\\
+Symbol threshold & readout & $\mathrm{sign}(x_i)$\\
+\bottomrule
+\end{tabular}
+\caption{Every stage of the physical machine has a counterpart in the simulator; the simulator is the machine with the optics deleted.}
+\end{table}
+
+\section{The simulator}
+
+We do not model waveguides or modulators; we integrate the dynamics they implement. Each spin becomes a continuous ``soft spin'' $x_i$ obeying a mean\text{-}field coherent\text{-}Ising\text{-}machine equation,
+\begin{equation}
+\frac{dx_i}{dt} \;=\; \underbrace{(p-1)\,x_i - x_i^{3}}_{\text{gain double\text{-}well}} \;-\; \underbrace{c\,(W\bx)_i}_{\text{coupling}} \;+\; \underbrace{\sqrt{2D}\,\eta_i(t)}_{\text{noise / annealing}},
+\end{equation}
+integrated by Euler--Maruyama, $x_i \leftarrow x_i + \Delta t\,(\text{drift}) + \sqrt{2D\,\Delta t}\;\mathcal N(0,1)$. The pump $p$ ramps past threshold to anneal; the readout is $\mathrm{sign}(x_i)$; the best cut seen along the trajectory is kept. The coupling is scaled by the spectral radius of $W$ so the dynamics are comparable across problem sizes.
+
+\textbf{The output layer.} The analog core typically stalls a few percent short of the optimum. On its raw output we run greedy $1$\text{-}flip local search: repeatedly flip the single spin whose flip most increases the cut---using $g_i = s_i\,(W\bs)_i$---until no flip helps, landing at the nearest local optimum. This step acts only on the machine's \emph{output}, so it requires no faithful model of the loop's internal dynamics, which is what makes it a defensible contribution for a simulation study.
+
+\section{Results}
+
+On a $140$\text{-}vertex graph scored against the best\text{-}known cut, and a $18$\text{-}vertex graph where the exact optimum is available by enumeration:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Solver} & \textbf{\% of best\text{-}known} & \textbf{success prob.} & \textbf{TTS$_{99}$ (s)} & \textbf{$P_{\text{success}}$ ($n{=}18$)}\\
+\midrule
+CIM, raw            & 82.3\% & 0.00 & $\infty$ & 0.02\\
+CIM + output layer  & \textbf{100\%} & \textbf{1.00} & \textbf{0.089} & 0.18\\
+Simulated annealing & 100\% & 1.00 & 0.125 & 0.95\\
+\bottomrule
+\end{tabular}
+\caption{The raw analog core never reaches the optimum on the larger instance; the local\text{-}search output layer reaches it on every run, at a lower time\text{-}to\text{-}solution than simulated annealing. Time\text{-}to\text{-}solution is the wall\text{-}clock for a 99\%\text{-}confidence hit.}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\begin{minipage}[t]{0.49\textwidth}\centering
+\includegraphics[width=\textwidth]{fig_distributions.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}\centering
+\includegraphics[width=\textwidth]{fig_convergence.png}
+\end{minipage}
+\caption{\textit{Left:} distribution of final cut values over $60$ runs on the small instance; the output layer shifts the whole distribution toward the optimum (dashed line), raising the per\text{-}run success probability roughly ninefold. \textit{Right:} best cut over a single run on the $140$\text{-}vertex instance; the raw analog dynamics plateau well short of the reference, and that gap is what the output layer removes and what a tuned annealing schedule would attack next.}
+\end{figure}
+
+
+
+\section{Limitations and next steps}
+
+The raw simulator is deliberately \emph{untuned}: fixed coupling, noise, and pump schedule. Its mediocre raw performance is genuine, and it points directly at the natural next step---searching the noise/annealing schedule (Bayesian optimisation or reinforcement learning), which turns the paper's ``noise as annealing'' claim into a quantitative design knob. The dynamics are mean\text{-}field rather than a faithful model of the specific optoelectronic loop or its DSP stage; the three effects the model omits---embedded telecom DSP, the exact sinusoidal modulator nonlinearity, and noise treated as a resource---are exactly the machine's three contributions, and the honest places to extend the model. All timings are single\text{-}CPU wall\text{-}clock and measure algorithmic behaviour, not the hardware's real speed.
+
+\vspace{0.6em}
+\hrule height 0.4pt
+\vspace{0.5em}
+{\small\color{accent} Code, benchmarks, and an interactive browser demo accompany this note.}
+
+\end{document}
