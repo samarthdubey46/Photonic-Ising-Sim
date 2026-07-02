@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Photonic Ising Machine — 3D live run</title>
+<style>
+  :root{
+    --bg:#07090c; --panel:rgba(13,17,23,.88); --line:#22303f;
+    --txt:#dbe6f1; --dim:#7d8fa3; --accent:#4db8ff; --gold:#e8c66a;
+    --good:#3ddc84; --red:#ff5a5a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--txt);
+    font:14px/1.45 "SF Mono",ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+  #scene{position:fixed;inset:0}
+  .panel{position:fixed;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px;backdrop-filter:blur(6px)}
+  #hud{top:12px;left:12px;width:300px}
+  #hud h1{font-size:15px;letter-spacing:.4px;margin-bottom:2px}
+  #hud .sub{color:var(--dim);font-size:11px;margin-bottom:10px}
+  .stages{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+  .stage{font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid var(--line);
+    color:var(--dim);transition:all .15s}
+  .stage.on{color:#03131f;background:var(--accent);border-color:var(--accent);font-weight:700}
+  .stage.elec.on{background:var(--good);border-color:var(--good)}
+  #stageline{min-height:34px;font-size:12px;color:var(--accent);margin-bottom:8px}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+  .metric{border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+  .metric .k{font-size:10px;color:var(--dim)}
+  .metric .v{font-size:16px;font-weight:700}
+  .bar{height:6px;border-radius:4px;background:#16202b;overflow:hidden;margin-bottom:10px}
+  .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#4db8ff,#3ddc84)}
+  .btns{display:flex;gap:6px;margin-bottom:8px}
+  button{flex:1;background:#16202b;color:var(--txt);border:1px solid var(--line);
+    border-radius:8px;padding:7px 0;font:inherit;font-size:12px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#03131f;font-weight:700;border-color:var(--accent)}
+  button:disabled{opacity:.4;cursor:default}
+  label{display:block;font-size:11px;color:var(--dim);margin:6px 0 2px}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  #right{top:12px;right:12px;width:280px}
+  #right h2{font-size:12px;color:var(--dim);margin:4px 0 6px;font-weight:400}
+  canvas.mini{width:100%;border:1px solid var(--line);border-radius:8px;background:#0a0e13}
+  #banner{left:50%;bottom:22px;transform:translateX(-50%);text-align:center;
+    font-size:15px;font-weight:700;padding:10px 26px;display:none;border-color:var(--good);
+    color:var(--good);box-shadow:0 0 30px rgba(61,220,132,.25)}
+  #hint{position:fixed;bottom:10px;left:12px;color:var(--dim);font-size:11px}
+  @media(max-width:900px){#right{display:none}}
+
+  /* top nav */
+  #topnav{top:0;left:0;right:0;border-radius:0;border-width:0 0 1px 0;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 16px;z-index:20}
+  #topnav .brand{font-weight:700;font-size:13px;letter-spacing:.3px}
+  #topnav nav{display:flex;gap:4px}
+  #topnav nav a{padding:5px 11px;border:1px solid transparent;border-radius:6px;
+    color:var(--dim);font-size:12px;text-decoration:none}
+  #topnav nav a.active{color:var(--txt);border-color:var(--line)}
+  #topnav nav a:hover{color:var(--txt)}
+  #hud{top:52px}
+  #right{top:52px}
+
+  /* hover tooltip */
+  #tooltip{position:fixed;pointer-events:none;z-index:50;
+    background:rgba(8,10,14,.94);border:1px solid var(--accent);border-radius:8px;
+    padding:8px 12px;max-width:260px;font-size:12px;line-height:1.45;display:none;
+    box-shadow:0 8px 22px rgba(0,0,0,.45)}
+  #tooltip b{color:var(--accent);display:block;font-size:12.5px;margin-bottom:3px}
+  #tooltip span{color:var(--dim)}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div class="panel" id="topnav">
+  <div class="brand">Photonic Ising Machine</div>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="benchmark.html">Benchmark</a>
+    <a href="machine3d.html" class="active">3D Machine</a>
+  </nav>
+</div>
+
+<div id="tooltip"><b id="tt-title"></b><span id="tt-desc"></span></div>
+
+<div class="panel" id="hud">
+  <h1>Photonic Ising machine</h1>
+  <div class="sub">Hopfield-inspired Max-Cut solver — live optoelectronic loop</div>
+
+  <div class="stages" id="stages"></div>
+  <div id="stageline">press <b>run</b> to launch the first laser pulse</div>
+
+  <div class="metrics">
+    <div class="metric"><div class="k">iteration</div><div class="v" id="m-step">0</div></div>
+    <div class="metric"><div class="k">pump p(t)</div><div class="v" id="m-pump">−2.00</div></div>
+    <div class="metric"><div class="k">cut now</div><div class="v" id="m-cut">0</div></div>
+    <div class="metric"><div class="k">best cut</div><div class="v" id="m-best">0</div></div>
+    <div class="metric"><div class="k">reference</div><div class="v" id="m-ref">–</div></div>
+    <div class="metric"><div class="k">% of ref</div><div class="v" id="m-pct">0%</div></div>
+  </div>
+  <div class="bar"><i id="prog"></i></div>
+
+  <div class="btns">
+    <button class="primary" id="run">▶ run</button>
+    <button id="reset">↺ new problem</button>
+  </div>
+  <label>loop speed <span id="speedval">2.0×</span></label>
+  <input id="speed" type="range" min="0.5" max="10" step="0.5" value="2" />
+  <label>problem size n = <span id="nval">16</span> spins</label>
+  <input id="n" type="range" min="8" max="30" step="1" value="16" />
+</div>
+
+<div class="panel" id="right">
+  <h2>problem graph — spins &amp; cut edges</h2>
+  <canvas class="mini" id="graph" width="252" height="220"></canvas>
+  <h2 style="margin-top:10px">best cut vs iteration</h2>
+  <canvas class="mini" id="trace" width="252" height="110"></canvas>
+  <h2 style="margin-top:10px">soft-spin amplitudes x<sub>i</sub></h2>
+  <canvas class="mini" id="amps" width="252" height="60"></canvas>
+</div>
+
+<div class="panel" id="banner"></div>
+<div id="hint">drag = orbit · scroll = zoom · right-drag = pan</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+/* ================= CIM solver (same dynamics as ising_maxcut/cim.py) ====== */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(rng){let u=0,v=0;while(!u)u=rng();while(!v)v=rng();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+function buildGraph(n,seed){
+  const rng=mulberry32(seed), W=new Float64Array(n*n), edges=[];
+  const side=i=>i<n/2?0:1;
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    const p=side(i)!==side(j)?0.75:0.10;
+    if(rng()<p){W[i*n+j]=1;W[j*n+i]=1;edges.push([i,j]);}
+  }
+  return {W,edges};
+}
+function spinsOf(x){const s=new Float64Array(x.length);
+  for(let i=0;i<x.length;i++)s[i]=x[i]>=0?1:-1;return s;}
+function cutValue(W,n,s){let q=0,tot=0;
+  for(let i=0;i<n;i++){let row=0;for(let j=0;j<n;j++){row+=W[i*n+j]*s[j];tot+=W[i*n+j];}q+=s[i]*row;}
+  return 0.25*(tot-q);}
+function spectralScale(W,n){
+  let v=new Float64Array(n).fill(1),lam=1;
+  for(let it=0;it<12;it++){const w=new Float64Array(n);
+    for(let i=0;i<n;i++){let a=0;for(let j=0;j<n;j++)a+=W[i*n+j]*v[j];w[i]=a;}
+    let nrm=0;for(let i=0;i<n;i++)nrm+=w[i]*w[i];nrm=Math.sqrt(nrm)||1;
+    for(let i=0;i<n;i++)v[i]=w[i]/nrm;lam=nrm;}
+  return lam||1;
+}
+function greedyLocalSearch(W,n,s){s=Float64Array.from(s);
+  for(let sweep=0;sweep<5000;sweep++){let bi=-1,bg=1e-9;
+    for(let i=0;i<n;i++){let row=0;for(let j=0;j<n;j++)row+=W[i*n+j]*s[j];
+      const g=s[i]*row;if(g>bg){bg=g;bi=i;}}
+    if(bi<0)break;s[bi]=-s[bi];}
+  return s;}
+
+const TOTAL_STEPS=420;
+let S=null;
+function fresh(){
+  const n=+ui.n.value, seed=(Math.random()*1e9)|0;
+  const {W,edges}=buildGraph(n,seed);
+  const rng=mulberry32(seed^0x9e3779b9);
+  const x=new Float64Array(n);for(let i=0;i<n;i++)x[i]=0.01*gauss(rng);
+  let ref=0;
+  for(let r=0;r<40;r++){const rs=new Float64Array(n);
+    for(let i=0;i<n;i++)rs[i]=rng()<0.5?1:-1;
+    ref=Math.max(ref,cutValue(W,n,greedyLocalSearch(W,n,rs)));}
+  const spins=spinsOf(x);
+  return {n,W,edges,x,rng,ref,spins,step:0,coupling:0.5/spectralScale(W,n),
+    best:cutValue(W,n,spins),bestSpins:spins.slice(),trace:[],done:false};
+}
+function stepCIM(k){
+  const {n,W,x,rng,coupling}=S, dt=0.05, noise=0.05, ns=Math.sqrt(2*noise*dt);
+  for(let s=0;s<k&&S.step<TOTAL_STEPS;s++){
+    const p=-2+3*(S.step/TOTAL_STEPS);
+    const field=new Float64Array(n);
+    for(let i=0;i<n;i++){let a=0;for(let j=0;j<n;j++)a+=W[i*n+j]*x[j];field[i]=a;}
+    for(let i=0;i<n;i++){
+      const drift=(p-1)*x[i]-x[i]*x[i]*x[i]-coupling*field[i];
+      x[i]+=dt*drift+ns*gauss(rng);
+    }
+    S.step++;
+    S.spins=spinsOf(x);
+    const c=cutValue(W,n,S.spins);
+    if(c>S.best){S.best=c;S.bestSpins=S.spins.slice();}
+    S.trace.push(S.best);
+  }
+}
+
+/* ================= three.js scene ========================================= */
+const container=document.getElementById("scene");
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x07090c);
+scene.fog=new THREE.Fog(0x07090c,30,70);
+
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.1,200);
+camera.position.set(-3.5,13.5,19.5);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.set(0.4,0.3,-0.4);
+controls.enableDamping=true;
+controls.maxPolarAngle=Math.PI*0.49;
+
+scene.add(new THREE.AmbientLight(0x8899bb,.55));
+const key=new THREE.DirectionalLight(0xffffff,1.6);
+key.position.set(-8,18,10);key.castShadow=true;
+key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.left=-16;key.shadow.camera.right=16;
+key.shadow.camera.top=16;key.shadow.camera.bottom=-16;
+scene.add(key);
+const fill=new THREE.DirectionalLight(0x88aaff,.4);
+fill.position.set(10,8,-8);scene.add(fill);
+
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const mat={
+  board:new THREE.MeshStandardMaterial({color:0xdfe3e8,roughness:.85}),
+  dark:new THREE.MeshStandardMaterial({color:0x24272b,roughness:.5,metalness:.35}),
+  chip:new THREE.MeshStandardMaterial({color:0x9aa1a9,roughness:.45,metalness:.6}),
+  gold:new THREE.MeshStandardMaterial({color:0xcda845,roughness:.35,metalness:.9}),
+  white:new THREE.MeshStandardMaterial({color:0xf2f4f6,roughness:.7}),
+  green:new THREE.MeshStandardMaterial({color:0x1d7a4f,roughness:.45,emissive:0x0a2e1d}),
+  teal:new THREE.MeshStandardMaterial({color:0x1a6d6d,roughness:.45,emissive:0x072a2a}),
+  gray:new THREE.MeshStandardMaterial({color:0x3a3f45,roughness:.5}),
+  guide:new THREE.MeshStandardMaterial({color:0x1c72c4,emissive:0x1266c0,
+    emissiveIntensity:.55,roughness:.3,transparent:true,opacity:.9}),
+  fiber:new THREE.MeshStandardMaterial({color:0x9aa3ad,roughness:.4,metalness:.6}),
+  ps:new THREE.MeshStandardMaterial({color:0xff5a5a,emissive:0xcc2020,emissiveIntensity:.5}),
+  pd:new THREE.MeshStandardMaterial({color:0xd97b2f,emissive:0x5a2a08,roughness:.4}),
+};
+
+function box(w,h,d,m,x,y,z,shadow=true){
+  const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
+  b.position.set(x,y,z);b.castShadow=shadow;b.receiveShadow=true;
+  scene.add(b);return b;
+}
+
+/* hover-info registry: any mesh/sprite tagged here shows a tooltip on hover */
+const hoverables=[];
+function hover(obj,title,desc){obj.userData.info={title,desc};hoverables.push(obj);return obj;}
+
+/* label sprites */
+function label(text,x,y,z,scale=1,color="#e8eef5",info=null){
+  const pad=18,fs=46;
+  const cv=document.createElement("canvas");
+  const c=cv.getContext("2d");c.font=`700 ${fs}px ui-monospace,Menlo,monospace`;
+  cv.width=c.measureText(text).width+pad*2;cv.height=fs+pad*1.4;
+  const c2=cv.getContext("2d");
+  c2.fillStyle="rgba(8,10,14,.72)";
+  c2.beginPath();c2.roundRect(0,0,cv.width,cv.height,14);c2.fill();
+  c2.font=`700 ${fs}px ui-monospace,Menlo,monospace`;
+  c2.fillStyle=color;c2.textBaseline="middle";
+  c2.fillText(text,pad,cv.height/2+2);
+  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,transparent:true}));
+  const k=0.011*scale;sp.scale.set(cv.width*k,cv.height*k,1);
+  sp.position.set(x,y,z);sp.renderOrder=5;scene.add(sp);
+  if(info)hover(sp,info.title,info.desc);
+  return sp;
+}
+
+/* ---- static hardware -------------------------------------------------- */
+const INFO={
+  laser:{title:"Laser diode",desc:"Coherent light source. Fires the pulse that carries the machine's current spin state through the photonic circuit each round trip."},
+  pic:{title:"TFLN photonic chip",desc:"Thin-film lithium-niobate integrated circuit. Hosts the MZI banks that implement the graph's coupling matrix and the nonlinear activation, all on one die."},
+  ctrl:{title:"Control unit",desc:"Sequences the loop — triggers laser pulses, times the ADC → DSP → DAC cycle, and ramps the pump p(t) that anneals the system toward a solution."},
+  dsp:{title:"DSP",desc:"Digital signal processor. Computes the next state x⁽ᵗ⁺¹⁾ = gain(p)·x − x³ − coupling·(W·σ(x)) + noise — the actual Ising update happens here."},
+  dac:{title:"DAC",desc:"Digital-to-analog converter. Drives the phase/amplitude modulators with the new state x⁽ᵗ⁺¹⁾ computed by the DSP."},
+  adc:{title:"ADC",desc:"Analog-to-digital converter. Samples the photodetector's current every round trip, turning the optical readout into digital state x⁽ᵗ⁾."},
+  pd:{title:"Photodetector (PD)",desc:"Converts the amplified optical output W·σ(x⁽ᵗ⁾) back into an electrical photocurrent for the ADC to sample."},
+  soa:{title:"QD SOA",desc:"Quantum-dot semiconductor optical amplifier. Boosts the weak optical output before it reaches the photodetector."},
+  noise:{title:"Optical noise injector",desc:"Injects controlled optical noise into the loop. Noise acts as annealing — it helps the system escape local energy minima, the paper's key idea."},
+  W:{title:"MZI bank — W",desc:"Gold electrodes drive Mach-Zehnder interferometers programmed with the graph's coupling weights W_ij, weighting the pulse per the problem graph."},
+  sigma:{title:"MZI bank — σ(x⁽ᵗ⁾)",desc:"Applies the nonlinear activation σ to the current spin state x⁽ᵗ⁾ before it's coupled back through W."},
+  ps:{title:"Phase shifter (PS)",desc:"Trims an interferometer arm's phase bias so the two arms interfere constructively or destructively as the current state requires."},
+  wire:{title:"Wire bonds",desc:"Electrical connections between the photonic chip and the control electronics driving its modulators."},
+  guide:{title:"Optical waveguide",desc:"Guides the laser pulse through each stage of the circuit — laser → W bank → phase shifters → σ bank → SOA → photodetector."},
+};
+
+box(24,1.2,15,mat.board,0,-0.6,0);                       // main board
+const laser=hover(box(2.4,1.7,1.5,mat.dark,-9.2,0.85,-4.6),INFO.laser.title,INFO.laser.desc);
+const apert=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,.1,24),
+  new THREE.MeshStandardMaterial({color:0xff3b30,emissive:0xff1a1a,emissiveIntensity:2}));
+apert.rotation.z=Math.PI/2;apert.position.set(-7.95,0.75,-4.2);scene.add(apert);
+hover(apert,INFO.laser.title,INFO.laser.desc);
+const laserGlow=new THREE.PointLight(0xff3020,0,6);
+laserGlow.position.copy(apert.position);scene.add(laserGlow);
+
+hover(box(10.5,0.4,6.6,mat.chip,-1.5,0.2,0.8),INFO.pic.title,INFO.pic.desc); // TFLN PIC
+// decorative surface pads
+{const g=new THREE.PlaneGeometry(.26,.26);
+ const m=new THREE.MeshStandardMaterial({color:0x8b9097,roughness:.35,metalness:.8});
+ for(let i=0;i<8;i++)for(let j=0;j<5;j++){
+   const p=new THREE.Mesh(g,m);p.rotation.x=-Math.PI/2;
+   p.position.set(-5.9+i*1.35,0.405,-1.9+j*1.35);scene.add(p);}}
+
+// control PCB stack
+box(9,0.5,4.6,mat.white,3.6,0.35,-5.4);
+hover(box(8.2,0.5,1.1,mat.green,3.6,0.85,-6.7),INFO.ctrl.title,INFO.ctrl.desc);
+label("Control Unit",3.6,2.1,-6.9,.9,"#e8eef5",INFO.ctrl);
+hover(box(8.2,0.5,1.1,mat.gray, 3.6,0.85,-5.5),INFO.dsp.title,INFO.dsp.desc);
+label("DSP",3.6,1.55,-5.5,.9,"#e8eef5",INFO.dsp);
+const dacBox=hover(box(3.9,0.5,1.0,mat.teal,1.5,0.85,-4.35),INFO.dac.title,INFO.dac.desc);
+label("DAC",1.5,1.7,-4.35,.9,"#e8eef5",INFO.dac);
+const adcBox=hover(box(3.9,0.5,1.0,mat.teal,5.8,0.85,-4.35),INFO.adc.title,INFO.adc.desc);
+label("ADC",5.8,1.7,-4.35,.9,"#e8eef5",INFO.adc);
+
+// photodetector
+hover(box(1.5,0.35,1.5,mat.white,7.6,0.18,-1.6),INFO.pd.title,INFO.pd.desc);
+const pd=new THREE.Mesh(new THREE.TorusGeometry(.42,.14,12,24,Math.PI),mat.pd);
+pd.rotation.x=-Math.PI/2;pd.position.set(7.6,0.45,-1.6);pd.castShadow=true;scene.add(pd);
+hover(pd,INFO.pd.title,INFO.pd.desc);
+label("PD",8.9,0.9,-1.9,.9,"#e8eef5",INFO.pd);
+
+// QD SOA + optical-noise triangles
+function tri(x,z,ry){
+  const shp=new THREE.Shape();shp.moveTo(-0.9,-0.75);shp.lineTo(0.9,-0.75);shp.lineTo(0,0.9);shp.closePath();
+  const g=new THREE.ExtrudeGeometry(shp,{depth:.5,bevelEnabled:false});
+  const m=new THREE.Mesh(g,mat.dark);m.rotation.x=-Math.PI/2;m.rotation.z=ry;
+  m.position.set(x,0.5,z);m.castShadow=true;scene.add(m);return m;}
+hover(tri(7.4,1.3,Math.PI),INFO.soa.title,INFO.soa.desc);
+label("QD SOA",9.2,1.0,0.9,.9,"#e8eef5",INFO.soa);
+hover(tri(8.4,3.7,Math.PI),INFO.noise.title,INFO.noise.desc);
+label("Optical Noise",8.2,1.6,4.4,.85,"#e8eef5",INFO.noise);
+
+// gold modulator electrodes (3 strips per section, straddling the guide)
+function electrodes(cx,cz,len,info){
+  for(const dz of[-0.42,0,0.42]) hover(box(len,.1,.22,mat.gold,cx,0.47,cz+dz),info.title,info.desc);
+}
+electrodes(-1.7,-1.4,6.2,INFO.W);      // W section
+electrodes(-1.2, 0.4,6.2,INFO.sigma);  // sigma section
+// phase shifters
+const ps1=hover(box(.6,.28,.5,mat.ps,1.9,0.55,-1.4),INFO.ps.title,INFO.ps.desc);
+const ps2=hover(box(.6,.28,.5,mat.ps,-4.7,0.55,0.4),INFO.ps.title,INFO.ps.desc);
+label("PS",1.9,1.25,-1.9,.75,"#e8eef5",INFO.ps);  label("PS",-4.7,1.25,-0.1,.75,"#e8eef5",INFO.ps);
+label("W",-3.3,1.35,-1.4,1.05,"#e8eef5",INFO.W);
+label("σ(x⁽ᵗ⁾)",0.6,1.35,0.4,1.0,"#e8eef5",INFO.sigma);
+label("W·σ(x⁽ᵗ⁾)",4.3,1.3,2.4,.9,"#e8eef5",INFO.guide);
+label("Laser",-9.2,2.4,-4.6,1.0,"#ffb3ab",INFO.laser);
+label("TFLN PIC",-3.6,0.75,3.6,.9,"#e8eef5",INFO.pic);
+
+// wire-bond pads at chip front
+{for(let i=0;i<4;i++){hover(box(.5,.08,.5,mat.gold,-5.2+i*1.1,0.43,3.6,false),INFO.wire.title,INFO.wire.desc);
+  const w=new THREE.Mesh(new THREE.TorusGeometry(.55,.03,8,20,Math.PI),mat.gold);
+  w.position.set(-5.2+i*1.1,0.42,4.15);w.rotation.y=Math.PI/2;w.rotation.z=Math.PI;
+  scene.add(w);
+  box(.5,.06,.5,mat.gold,-5.2+i*1.1,0.06,4.75,false);}}
+
+/* ---- optical path ------------------------------------------------------ */
+function roundedRoute(pts,r=0.55,seg=8){
+  const out=[pts[0].clone()];
+  for(let i=1;i<pts.length-1;i++){
+    const p=pts[i],a=pts[i-1],b=pts[i+1];
+    const da=a.clone().sub(p),db=b.clone().sub(p);
+    const la=Math.min(r,da.length()*.45),lb=Math.min(r,db.length()*.45);
+    const pa=p.clone().add(da.normalize().multiplyScalar(la));
+    const pb=p.clone().add(db.normalize().multiplyScalar(lb));
+    out.push(pa);
+    for(let s=1;s<seg;s++){const t=s/seg;
+      out.push(pa.clone().multiplyScalar((1-t)*(1-t))
+        .add(p.clone().multiplyScalar(2*t*(1-t)))
+        .add(pb.clone().multiplyScalar(t*t)));}
+    out.push(pb);
+  }
+  out.push(pts[pts.length-1].clone());
+  // drop duplicate/near-duplicate consecutive points: zero-length segments
+  // break Curve.getUtoTmapping (NaN at u=1)
+  const clean=[out[0]];
+  for(let i=1;i<out.length;i++)
+    if(out[i].distanceToSquared(clean[clean.length-1])>1e-10)clean.push(out[i]);
+  return clean;
+}
+const PT=(c,u)=>c.getPointAt(Math.min(Math.max(u,0),0.99995));
+const wayPts=[
+  V(-7.95,0.75,-4.2),   // laser aperture
+  V(-7.2,0.6,-3.4),
+  V(-6.7,0.55,-1.4),    // chip entry
+  V(2.6,0.55,-1.4),     // through W + PS1 →
+  V(3.4,0.55,-0.5),     // U-turn
+  V(2.9,0.55,0.4),
+  V(-5.3,0.55,0.4),     // ← through σ + PS2
+  V(-6.1,0.55,1.3),     // U-turn
+  V(-5.5,0.55,2.2),
+  V(3.6,0.55,2.2),      // → output W·σ(x)
+  V(5.6,0.6,2.2),
+  V(7.4,0.65,1.3),      // QD SOA
+  V(7.6,0.7,-0.2),
+  V(7.6,0.7,-1.6),      // PD
+];
+const route=roundedRoute(wayPts);
+const curve=new THREE.CatmullRomCurve3(route,false,"catmullrom",0.02);
+const tube=new THREE.Mesh(new THREE.TubeGeometry(curve,400,0.085,10,false),mat.guide);
+tube.castShadow=false;scene.add(tube);
+hover(tube,INFO.guide.title,INFO.guide.desc);
+// halo
+const halo=new THREE.Mesh(new THREE.TubeGeometry(curve,400,0.16,10,false),
+  new THREE.MeshBasicMaterial({color:0x2a8fe0,transparent:true,opacity:.14,
+    blending:THREE.AdditiveBlending,depthWrite:false}));
+scene.add(halo);
+
+// decorative second MZI arms (split guides beside electrodes)
+for(const[z,x0,x1]of[[-1.4,-4.9,1.3],[0.4,-4.2,1.9]]){
+  const arm=new THREE.CatmullRomCurve3(roundedRoute([
+    V(x0,0.55,z),V(x0+0.7,0.55,z-0.42),V(x1-0.7,0.55,z-0.42),V(x1,0.55,z)],0.3));
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(arm,80,0.07,8,false),mat.guide));
+}
+
+// fraction of arc length where each stage begins
+function fracAt(target){
+  const N=600;let best=0,bd=1e9;
+  for(let i=0;i<=N;i++){const d=PT(curve,i/N).distanceTo(target);
+    if(d<bd){bd=d;best=i/N;}}
+  return best;
+}
+const OPT_STAGES=[
+  {u:0.0,               id:"laser", txt:"laser fires — coherent pulse enters the fiber"},
+  {u:fracAt(V(-4.9,0.55,-1.4)), id:"W",  txt:"MZI bank W: pulse amplitude weighted by the coupling matrix (the graph)"},
+  {u:fracAt(V(1.9,0.55,-1.4)),  id:"PS", txt:"phase shifter trims the interferometer bias"},
+  {u:fracAt(V(-0.5,0.55,0.4)),  id:"σ",  txt:"MZI bank σ(x⁽ᵗ⁾): nonlinear activation applied to the state"},
+  {u:fracAt(V(0.5,0.55,2.2)),   id:"out", txt:"output guide carries W·σ(x⁽ᵗ⁾) off-chip"},
+  {u:fracAt(V(7.4,0.65,1.3)),   id:"SOA", txt:"QD SOA amplifies; optical noise injected — noise acts as annealing"},
+  {u:fracAt(V(7.6,0.7,-1.4)),   id:"PD",  txt:"photodetector converts light → photocurrent"},
+];
+
+// pulse = head sphere + point light + fading trail sprites
+const pulseMat=new THREE.MeshBasicMaterial({color:0xaee2ff});
+const pulse=new THREE.Mesh(new THREE.SphereGeometry(.17,16,16),pulseMat);
+const pulseLight=new THREE.PointLight(0x66c4ff,0,5);
+pulse.add(pulseLight);pulse.visible=false;scene.add(pulse);
+const TRAIL=26, trail=[];
+{const g=new THREE.SphereGeometry(.12,10,10);
+ for(let i=0;i<TRAIL;i++){const m=new THREE.Mesh(g,
+   new THREE.MeshBasicMaterial({color:0x59b7ff,transparent:true,opacity:0,
+     blending:THREE.AdditiveBlending,depthWrite:false}));
+   m.visible=true;scene.add(m);trail.push(m);}}
+
+/* ---- electrical paths --------------------------------------------------- */
+function polyline(pts,color){
+  const g=new THREE.BufferGeometry().setFromPoints(pts);
+  const l=new THREE.Line(g,new THREE.LineBasicMaterial({color,transparent:true,opacity:.5}));
+  scene.add(l);
+  return new THREE.CatmullRomCurve3(pts,false,"catmullrom",0.02);
+}
+const pdToAdc=polyline([V(7.6,0.7,-1.6),V(7.4,1.1,-2.8),V(6.4,1.1,-3.6),V(5.8,1.1,-4.35)],0x3ddc84);
+const dacToChip=polyline([V(1.5,1.1,-4.35),V(0.4,1.1,-3.4),V(-1.4,0.7,-2.5),V(-1.7,0.6,-1.9)],0x3ddc84);
+const eDot=new THREE.Mesh(new THREE.SphereGeometry(.13,10,10),
+  new THREE.MeshBasicMaterial({color:0x5cf2a4}));
+const eLight=new THREE.PointLight(0x3ddc84,0,4);
+eDot.add(eLight);eDot.visible=false;scene.add(eDot);
+
+const ELEC_STAGES=[
+  {id:"ADC",t0:0.00,t1:0.30,txt:"ADC samples the photocurrent → digital state x⁽ᵗ⁾"},
+  {id:"DSP",t0:0.30,t1:0.62,txt:"DSP updates the state: gain − x³ − coupling + pump ramp"},
+  {id:"DAC",t0:0.62,t1:1.00,txt:"DAC drives the modulators with the new state x⁽ᵗ⁺¹⁾"},
+];
+
+/* ================= HUD / 2D panels ======================================= */
+const ui={};
+["run","reset","speed","speedval","n","nval","stages","stageline","prog","banner",
+ "m-step","m-pump","m-cut","m-best","m-ref","m-pct","graph","trace","amps"]
+ .forEach(id=>ui[id]=document.getElementById(id));
+
+const STAGE_IDS=["laser","W","PS","σ","out","SOA","PD","ADC","DSP","DAC"];
+ui.stages.innerHTML=STAGE_IDS.map(s=>
+  `<span class="stage ${["ADC","DSP","DAC"].includes(s)?"elec":""}" data-s="${s}">${s}</span>`).join("");
+const stageEls={};document.querySelectorAll(".stage").forEach(e=>stageEls[e.dataset.s]=e);
+function setStage(id,txt){
+  Object.values(stageEls).forEach(e=>e.classList.remove("on"));
+  if(id)stageEls[id].classList.add("on");
+  if(txt!==undefined)ui.stageline.innerHTML=txt;
+}
+
+const gc=ui.graph.getContext("2d"),tc=ui.trace.getContext("2d"),ac=ui.amps.getContext("2d");
+function drawGraph(){
+  const w=ui.graph.width,h=ui.graph.height,n=S.n;
+  gc.clearRect(0,0,w,h);
+  const R=Math.min(w,h)*.42,cx=w/2,cy=h/2;
+  const px=i=>cx+R*Math.cos(-Math.PI/2+2*Math.PI*i/n);
+  const py=i=>cy+R*Math.sin(-Math.PI/2+2*Math.PI*i/n);
+  const s=S.done?S.bestSpins:S.spins;
+  for(const[i,j]of S.edges){
+    const cutE=s[i]!==s[j];
+    gc.strokeStyle=cutE?"#3ddc84":"rgba(125,143,163,.22)";
+    gc.lineWidth=cutE?1.6:1;
+    gc.beginPath();gc.moveTo(px(i),py(i));gc.lineTo(px(j),py(j));gc.stroke();
+  }
+  for(let i=0;i<n;i++){
+    gc.fillStyle=s[i]>0?"#4db8ff":"#ff8552";
+    gc.beginPath();gc.arc(px(i),py(i),5,0,7);gc.fill();
+  }
+}
+function drawTrace(){
+  const w=ui.trace.width,h=ui.trace.height;
+  tc.clearRect(0,0,w,h);
+  if(!S.trace.length)return;
+  const hi=Math.max(S.ref,1);
+  tc.strokeStyle="rgba(125,143,163,.5)";tc.setLineDash([4,4]);
+  const yRef=h-6-(h-14)*(S.ref/hi);
+  tc.beginPath();tc.moveTo(0,yRef);tc.lineTo(w,yRef);tc.stroke();tc.setLineDash([]);
+  tc.strokeStyle="#4db8ff";tc.lineWidth=1.6;tc.beginPath();
+  S.trace.forEach((v,i)=>{
+    const x=8+(w-16)*i/Math.max(TOTAL_STEPS-1,1);
+    const y=h-6-(h-14)*(v/hi);
+    i?tc.lineTo(x,y):tc.moveTo(x,y);
+  });
+  tc.stroke();
+}
+function drawAmps(){
+  const w=ui.amps.width,h=ui.amps.height,n=S.n;
+  ac.clearRect(0,0,w,h);
+  const bw=(w-8)/n;
+  for(let i=0;i<n;i++){
+    const v=Math.max(-1.6,Math.min(1.6,S.x[i]))/1.6;
+    ac.fillStyle=v>=0?"#4db8ff":"#ff8552";
+    const bh=Math.abs(v)*(h/2-4);
+    ac.fillRect(4+i*bw,v>=0?h/2-bh:h/2,bw*.8,Math.max(bh,1));
+  }
+  ac.strokeStyle="rgba(125,143,163,.4)";
+  ac.beginPath();ac.moveTo(0,h/2);ac.lineTo(w,h/2);ac.stroke();
+}
+function readouts(){
+  ui["m-step"].textContent=S.step;
+  ui["m-pump"].textContent=(-2+3*S.step/TOTAL_STEPS).toFixed(2);
+  ui["m-cut"].textContent=cutValue(S.W,S.n,S.spins)|0;
+  ui["m-best"].textContent=S.best|0;
+  ui["m-ref"].textContent=S.ref|0;
+  ui["m-pct"].textContent=S.ref?Math.round(100*S.best/S.ref)+"%":"–";
+  ui.prog.style.width=(100*S.step/TOTAL_STEPS)+"%";
+  drawGraph();drawTrace();drawAmps();
+}
+
+/* ================= run loop =============================================== */
+let phase="idle";     // idle | optical | electrical | done
+let phT=0;            // 0..1 within current phase
+let running=false;
+
+const OPT_DUR=2.6, ELEC_DUR=1.5; // seconds at 1×
+function speed(){return +ui.speed.value;}
+function stepsPerLoop(){return Math.max(2,Math.round(6*speed()));}
+
+function launchPulse(){
+  phase="optical";phT=0;pulse.visible=true;
+  laserGlow.intensity=6;apert.material.emissiveIntensity=4;
+}
+function finishRun(){
+  phase="done";running=false;pulse.visible=false;eDot.visible=false;
+  trail.forEach(t=>t.material.opacity=0);
+  // output layer: greedy local search on the machine's answer
+  const polished=greedyLocalSearch(S.W,S.n,S.bestSpins);
+  const pc=cutValue(S.W,S.n,polished);
+  if(pc>S.best){S.best=pc;S.bestSpins=polished;}
+  S.spins=S.bestSpins;S.done=true;
+  const pct=Math.round(100*S.best/S.ref);
+  ui.banner.style.display="block";
+  ui.banner.innerHTML=`RESULT: max-cut = ${S.best|0} &nbsp;(${pct}% of reference)`+
+    `<div style="font-size:11px;font-weight:400;color:var(--dim)">raw machine answer polished by the greedy output layer</div>`;
+  setStage(null,`converged after ${S.step} iterations — readout sign(x) + local search`);
+  ui.run.textContent="▶ run";ui.run.disabled=true;
+  mat.guide.emissiveIntensity=1.2;
+  readouts();
+}
+
+let lastT=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min((now-lastT)/1000,0.05);lastT=now;
+  controls.update();
+  advance(dt,now);
+  renderer.render(scene,camera);
+}
+function advance(dt,now){
+
+  // decay flashes
+  laserGlow.intensity*=Math.pow(0.02,dt);
+  apert.material.emissiveIntensity+=(2-apert.material.emissiveIntensity)*dt*4;
+  for(const m of[ps1,ps2])m.material.emissiveIntensity+=(0.5-m.material.emissiveIntensity)*dt*5;
+  pd.material.emissiveIntensity=Math.max((pd.material.emissiveIntensity||0)-dt*3,0.15);
+  dacBox.material.emissiveIntensity=Math.max((dacBox.material.emissiveIntensity||0)-dt*2,0.12);
+
+  if(running&&phase==="optical"){
+    phT+=dt*speed()/OPT_DUR;
+    const u=Math.min(phT,1);
+    const p=PT(curve,u);
+    pulse.position.copy(p);
+    pulseLight.intensity=4;
+    // trail
+    for(let i=0;i<TRAIL;i++){
+      const tu=u-0.004*(i+1)*(1+speed()*.15);
+      if(tu>0){trail[i].position.copy(PT(curve,tu));
+        trail[i].material.opacity=.5*(1-i/TRAIL);}
+      else trail[i].material.opacity=0;
+    }
+    // stage callouts + component flashes
+    let cur=OPT_STAGES[0];
+    for(const st of OPT_STAGES)if(u>=st.u)cur=st;
+    if(cur.id!==frame._opt){frame._opt=cur.id;setStage(cur.id,cur.txt);
+      if(cur.id==="PS")ps1.material.emissiveIntensity=2.2;
+      if(cur.id==="σ")ps2.material.emissiveIntensity=2.2;
+      if(cur.id==="PD")pd.material.emissiveIntensity=1.4;
+    }
+    if(phT>=1){phase="electrical";phT=0;pulse.visible=false;
+      trail.forEach(t=>t.material.opacity=0);
+      eDot.visible=true;frame._elec=null;}
+  }
+  else if(running&&phase==="electrical"){
+    phT+=dt*speed()/ELEC_DUR;
+    const t=Math.min(phT,1);
+    let cur=ELEC_STAGES[0];
+    for(const st of ELEC_STAGES)if(t>=st.t0)cur=st;
+    if(cur.id!==frame._elec){frame._elec=cur.id;setStage(cur.id,cur.txt);
+      if(cur.id==="DSP"){          // the actual computation happens here
+        stepCIM(stepsPerLoop());readouts();
+      }
+      if(cur.id==="DAC")dacBox.material.emissiveIntensity=1.4;
+    }
+    if(cur.id==="ADC")eDot.position.copy(PT(pdToAdc,(t-cur.t0)/(cur.t1-cur.t0)));
+    else if(cur.id==="DSP"){eDot.visible=(((now/120)|0)%2)===0;   // blink at DSP
+      eDot.position.set(3.6,1.3,-5.5);}
+    else{eDot.visible=true;
+      eDot.position.copy(PT(dacToChip,(t-cur.t0)/(cur.t1-cur.t0)));}
+    eLight.intensity=3;
+    if(phT>=1){
+      eDot.visible=false;
+      if(S.step>=TOTAL_STEPS)finishRun();
+      else{frame._opt=null;launchPulse();}
+    }
+  }
+}
+
+/* ================= controls ============================================== */
+function resetAll(){
+  running=false;phase="idle";pulse.visible=false;eDot.visible=false;
+  trail.forEach(t=>t.material.opacity=0);
+  ui.banner.style.display="none";ui.run.disabled=false;ui.run.textContent="▶ run";
+  mat.guide.emissiveIntensity=.55;
+  S=fresh();frame._opt=frame._elec=null;
+  setStage(null,"press <b>run</b> to launch the first laser pulse");
+  readouts();
+}
+ui.run.onclick=()=>{
+  if(phase==="done")return;
+  running=!running;
+  ui.run.textContent=running?"⏸ pause":"▶ run";
+  if(running&&phase==="idle")launchPulse();
+};
+ui.reset.onclick=resetAll;
+ui.speed.oninput=()=>ui.speedval.textContent=(+ui.speed.value).toFixed(1)+"×";
+ui.n.oninput=()=>{ui.nval.textContent=ui.n.value;resetAll();};
+addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+/* ---- hover tooltips: raycast against tagged hardware ---------------------- */
+const tooltip=document.getElementById("tooltip");
+const ttTitle=document.getElementById("tt-title");
+const ttDesc=document.getElementById("tt-desc");
+const raycaster=new THREE.Raycaster();
+const pointerNDC=new THREE.Vector2();
+let hoverTarget=null;
+renderer.domElement.addEventListener("pointermove",(e)=>{
+  const r=renderer.domElement.getBoundingClientRect();
+  pointerNDC.x=((e.clientX-r.left)/r.width)*2-1;
+  pointerNDC.y=-((e.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(pointerNDC,camera);
+  const hit=raycaster.intersectObjects(hoverables,false)[0];
+  if(hit){
+    if(hoverTarget!==hit.object){
+      hoverTarget=hit.object;
+      const info=hoverTarget.userData.info;
+      ttTitle.textContent=info.title;ttDesc.textContent=info.desc;
+      tooltip.style.display="block";
+      renderer.domElement.style.cursor="pointer";
+    }
+    tooltip.style.left=Math.min(e.clientX+16,innerWidth-280)+"px";
+    tooltip.style.top=Math.min(e.clientY+16,innerHeight-70)+"px";
+  } else if(hoverTarget){
+    hoverTarget=null;tooltip.style.display="none";
+    renderer.domElement.style.cursor="default";
+  }
+});
+renderer.domElement.addEventListener("pointerleave",()=>{
+  hoverTarget=null;tooltip.style.display="none";
+  renderer.domElement.style.cursor="default";
+});
+
+resetAll();
+requestAnimationFrame(frame);
+if(location.search.includes("autorun")){ui.speed.value=10;ui.run.click();}
+// deterministic driver for automated tests (drives the same code path as rAF)
+window.__test={
+  tick:(dt,now)=>advance(dt,now??performance.now()),
+  state:()=>({phase,step:S.step,best:S.best,ref:S.ref,running,
+    banner:document.getElementById("banner").textContent.trim()}),
+  render:()=>renderer.render(scene,camera),
+};
+</script>
+</body>
+</html>

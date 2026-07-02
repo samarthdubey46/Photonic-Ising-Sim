@@ -1,112 +1,125 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Photonic Ising Machine — Max-Cut, live</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<title>Photonic Ising Machine — Max-Cut</title>
+<script>(function(){var t=localStorage.getItem("theme")||"dark";
+  document.documentElement.setAttribute("data-theme",t);})();</script>
 <style>
-  :root{
-    --bg:#0A0E1A; --panel:#111a2e; --panel-2:#0e1526; --line:#1e2a44;
-    --ink:#e6ecf7; --muted:#8896b3; --faint:#4a5a7d;
-    --up:#38bdf8;      /* spin +1 : one colour of light  */
-    --down:#fbbf24;    /* spin -1 : the other            */
-    --lit:#f2f7ff;     /* an illuminated (cut) edge       */
-    --accent:#38bdf8;
-  }
+  :root{ --font:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+    --c1:#3b82f6; --c2:#f59e0b; --c3:#10b981; }
+  html[data-theme="dark"]{ --bg:#0c0e12; --fg:#e6e6e6; --dim:#8b9096; --line:#262a31; --panel:#12151b; }
+  html[data-theme="light"]{ --bg:#ffffff; --fg:#16181d; --dim:#5c626b; --line:#dcdfe4; --panel:#f6f7f9; }
+
   *{box-sizing:border-box}
   html,body{margin:0}
-  body{
-    background:
-      radial-gradient(1200px 600px at 78% -10%, #16233f 0%, rgba(10,14,26,0) 60%),
-      var(--bg);
-    color:var(--ink);
-    font-family:"Space Grotesk",system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    line-height:1.5;
-  }
-  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 56px}
+  body{background:var(--bg);color:var(--fg);font-family:var(--font);
+    font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--fg);text-decoration:none;border-bottom:1px solid var(--line)}
+  a:hover{border-color:var(--fg)}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 24px 56px}
 
-  header.top{display:flex;flex-direction:column;gap:6px;margin-bottom:26px}
-  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.22em;
-    text-transform:uppercase;color:var(--accent)}
-  h1{font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-.02em;margin:0}
-  h1 .thin{color:var(--muted);font-weight:400}
-  .thesis{color:var(--muted);max-width:62ch;font-size:15px}
+  /* header / nav */
+  .site{display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid var(--line);padding:16px 0;margin-bottom:28px}
+  .brand{font-weight:600;letter-spacing:.02em}
+  .site nav{display:flex;gap:6px;align-items:center}
+  .site nav a{padding:6px 12px;border:1px solid transparent;border-radius:6px;color:var(--dim)}
+  .site nav a.active{color:var(--fg);border-color:var(--line)}
+  .site nav a:hover{color:var(--fg)}
+  .theme{margin-left:8px;background:none;border:1px solid var(--line);color:var(--fg);
+    border-radius:6px;width:34px;height:32px;cursor:pointer;font-family:var(--font);font-size:13px}
+  .theme:hover{border-color:var(--fg)}
+
+  .hero3d{display:block;border:none;text-align:center;margin:8px 0 20px;
+    font-size:clamp(32px,5.5vw,58px);font-weight:700;letter-spacing:-.02em;line-height:1.05;
+    color:var(--fg)}
+  .hero3d:hover{color:var(--fg);opacity:.8}
+  .hero3d .sub{display:block;font-size:14px;font-weight:500;letter-spacing:0;color:var(--dim);
+    margin-top:6px}
+  .pdf-link{display:inline-flex;align-items:center;gap:6px;margin:0 0 24px;
+    font-size:13px;color:var(--dim);border-color:var(--line)}
+  .pdf-link:hover{color:var(--fg);border-color:var(--fg)}
+
+  h1{font-size:24px;font-weight:600;letter-spacing:-.01em;margin:0 0 8px}
+  .thesis{color:var(--dim);max-width:70ch;margin:0 0 24px}
 
   .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;align-items:start}
   @media (max-width:880px){.grid{grid-template-columns:1fr}}
 
-  .panel{background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);
-    border:1px solid var(--line);border-radius:14px}
-  .stage{padding:16px 16px 18px;position:relative;overflow:hidden}
-  #graph{width:100%;height:auto;display:block;border-radius:10px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+  .stage{padding:16px 16px 18px}
+  #graph{width:100%;height:auto;display:block}
   .stage-cap{display:flex;justify-content:space-between;align-items:baseline;
-    margin:2px 4px 12px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--faint)}
-  .stage-cap b{color:var(--muted);font-weight:500}
+    margin:0 2px 12px;font-size:12px;color:var(--dim)}
+  .stage-cap b{color:var(--fg);font-weight:600}
 
   .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;
     margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
   .ctrl{display:flex;flex-direction:column;gap:6px}
-  .ctrl label{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
-  .ctrl label span{color:var(--ink)}
-  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:4px;
+  .ctrl label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--dim);display:flex;justify-content:space-between}
+  .ctrl label span{color:var(--fg)}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:3px;
     background:var(--line);outline:none}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
-    border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #0b1224}
-  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;
-    background:var(--accent);cursor:pointer;border:2px solid #0b1224}
-  select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);
-    border-radius:8px;padding:7px 9px;font-family:"IBM Plex Mono",monospace;font-size:12px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+    border-radius:50%;background:var(--fg);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:var(--fg);cursor:pointer;border:none}
+  select{background:var(--bg);color:var(--fg);border:1px solid var(--line);
+    border-radius:6px;padding:7px 9px;font-family:var(--font);font-size:12px}
   .buttons{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
-  button{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;
-    padding:9px 15px;border-radius:9px;border:1px solid var(--line);
-    background:#16213a;color:var(--ink);cursor:pointer;transition:.15s}
-  button:hover{border-color:var(--accent);background:#1a2946}
-  button.primary{background:var(--accent);color:#04121f;border-color:var(--accent)}
-  button.primary:hover{filter:brightness(1.08)}
+  button{font-family:var(--font);font-weight:500;font-size:13px;padding:8px 14px;
+    border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+  button:hover{border-color:var(--fg)}
+  button.primary{background:var(--fg);color:var(--bg)}
   button:disabled{opacity:.4;cursor:not-allowed}
-  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 
   aside{display:flex;flex-direction:column;gap:16px}
   .metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
-    border:1px solid var(--line);border-radius:14px;overflow:hidden}
+    border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .metric{background:var(--panel);padding:14px 16px}
-  .metric .k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--muted)}
-  .metric .v{font-family:"IBM Plex Mono",monospace;font-size:26px;font-weight:600;
-    margin-top:3px;font-variant-numeric:tabular-nums}
-  .metric .v small{font-size:13px;color:var(--faint)}
   .metric.wide{grid-column:1/-1}
-  #cutbar{height:5px;border-radius:4px;background:var(--line);margin-top:10px;overflow:hidden}
-  #cutbar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--down),var(--up));
-    transition:width .2s}
+  .metric .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .metric .v{font-size:24px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+  .metric .v small{font-size:12px;color:var(--dim)}
+  #cutbar{height:4px;border-radius:3px;background:var(--line);margin-top:10px;overflow:hidden}
+  #cutbar>i{display:block;height:100%;width:0;background:var(--fg);transition:width .2s}
 
   .tracewrap{padding:14px 16px 16px}
   .tracewrap h3{margin:0 0 2px;font-size:13px;font-weight:600}
-  .tracewrap p{margin:0 0 10px;font-size:12px;color:var(--muted);font-family:"IBM Plex Mono",monospace}
+  .tracewrap p{margin:0 0 10px;font-size:12px;color:var(--dim)}
   #trace{width:100%;height:auto;display:block}
-  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
-  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
-  .note{font-size:12.5px;color:var(--muted);padding:0 2px}
-  .note b{color:var(--ink);font-weight:600}
-  footer{margin-top:30px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;
-    color:var(--faint);border-top:1px solid var(--line);padding-top:16px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--dim)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .note{font-size:12.5px;color:var(--dim)}
+  .note b{color:var(--fg);font-weight:600}
+  footer{margin-top:30px;font-size:11.5px;color:var(--dim);
+    border-top:1px solid var(--line);padding-top:16px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-    <div class="eyebrow">Cascaded-modulator Ising machine · simulation</div>
-    <h1>Watch light <span class="thin">solve</span> Max-Cut.</h1>
-    <p class="thesis">A photonic Ising machine encodes a graph's vertices as ±1 spins, then lets a noisy,
-      annealed loop relax toward the lowest-energy configuration — the maximum cut. Cut edges light up as it
-      converges. This runs the same dynamics in your browser, then cleans up the result with a classical
-      output layer.</p>
+  <header class="site">
+    <div class="brand">Photonic Ising Machine</div>
+    <nav>
+      <a href="index.html" class="active">Home</a>
+      <a href="benchmark.html">Benchmark</a>
+      <a href="machine3d.html">3D Machine</a>
+      <button class="theme" id="theme" aria-label="toggle theme">◐</button>
+    </nav>
   </header>
+
+  <a href="machine3d.html" class="hero3d">Watch the machine in 3D →
+    <span class="sub">live laser-pulse walkthrough of the photonic Ising loop</span></a>
+  <a href="photonic-ising-maxcut.pdf" class="pdf-link">📄 Read the write-up (PDF)</a>
+
+  <h1>Watch light solve Max-Cut</h1>
+  <p class="thesis">A photonic Ising machine encodes a graph's vertices as ±1 spins, then lets a noisy,
+    annealed loop relax toward the lowest-energy configuration — the maximum cut. This runs the same
+    dynamics in your browser, then cleans up the result with a classical output layer.</p>
 
   <div class="grid">
     <!-- STAGE -->
@@ -159,11 +172,11 @@
       <div class="panel tracewrap">
         <h3>Best cut over the run</h3>
         <p>the loop climbing toward the reference</p>
-        <canvas id="trace" width="520" height="200"></canvas>
+        <canvas id="trace" width="520" height="240"></canvas>
         <div class="legend">
-          <span><i style="background:var(--up)"></i>spin +1</span>
-          <span><i style="background:var(--down)"></i>spin −1</span>
-          <span><i style="background:var(--lit)"></i>cut edge (lit)</span>
+          <span><i style="background:var(--c1)"></i>spin +1</span>
+          <span><i style="background:var(--c2)"></i>spin −1</span>
+          <span><i style="background:var(--fg)"></i>cut edge</span>
         </div>
       </div>
 
@@ -173,13 +186,24 @@
         contribution here: it acts only on the machine's output, so it needs no model of the optics.</p>
     </aside>
   </div>
-    <footer>simulated dynamics — no optics modelled · CIM mean-field + Euler–Maruyama · after
+  <footer>simulated dynamics — no optics modelled · CIM mean-field + Euler–Maruyama · after
     Abdul-Rahim et al., “Programmable 200 GOPS Hopfield-inspired photonic Ising machine,” Nature 2025 ·
-    <a href="benchmark.html" style="color:#38bdf8;text-decoration:none">benchmark lab →</a></footer>
+    <a href="benchmark.html">benchmark →</a></footer>
 </div>
 
 <script>
 "use strict";
+// ---- theme toggle ---------------------------------------------------------
+document.getElementById("theme").onclick=function(){
+  var h=document.documentElement,n=h.getAttribute("data-theme")==="dark"?"light":"dark";
+  h.setAttribute("data-theme",n);localStorage.setItem("theme",n);
+};
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function niceTicks(lo,hi,n){const span=(hi-lo)||1;const raw=span/n;
+  const mag=Math.pow(10,Math.floor(Math.log10(raw)));const norm=raw/mag;
+  const step=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;const out=[];
+  for(let v=Math.ceil(lo/step)*step;v<=hi+1e-9;v+=step)out.push(v);return out;}
+
 // ---- deterministic RNG ----------------------------------------------------
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -187,7 +211,7 @@ function gauss(rng){let u=0,v=0;while(!u)u=rng();while(!v)v=rng();
   return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
 
 // ---- problem + solver (port of the Python) --------------------------------
-let state = null;  // {n, W, pos, edges, x, spins, step, totalSteps, best, bestSpins, ref, trace, running, done}
+let state = null;
 
 function buildGraph(n, type, density, seed){
   const rng = mulberry32(seed);
@@ -195,7 +219,7 @@ function buildGraph(n, type, density, seed){
   const edges = [];
   const put = (i,j,w)=>{W[i*n+j]=w; W[j*n+i]=w; edges.push({i,j,w});};
   if(type==="cycle"){
-    const m = n%2 ? n : n-1;                 // force an odd cycle (frustrated)
+    const m = n%2 ? n : n-1;
     for(let i=0;i<m;i++) put(i,(i+1)%m,1);
     for(let i=m;i<n;i++) put(i,(i+1)%n||0,1);
   } else if(type==="planted"){
@@ -207,7 +231,6 @@ function buildGraph(n, type, density, seed){
   } else {
     for(let i=0;i<n;i++)for(let j=i+1;j<n;j++) if(rng()<density) put(i,j,1);
   }
-  // circle layout
   const pos=[]; const R=0.42, cx=0.5, cy=0.5;
   for(let i=0;i<n;i++){const a=-Math.PI/2 + 2*Math.PI*i/n;
     pos.push({x:cx+R*Math.cos(a), y:cy+R*Math.sin(a)});}
@@ -219,7 +242,7 @@ function spinsOf(x){const s=new Float64Array(x.length);
 function cutValue(W,n,s){let q=0,tot=0;
   for(let i=0;i<n;i++){let row=0;for(let j=0;j<n;j++){row+=W[i*n+j]*s[j];tot+=W[i*n+j];}q+=s[i]*row;}
   return 0.25*(tot-q);}
-function spectralScale(W,n){ // power iteration for |lambda|max
+function spectralScale(W,n){
   let v=new Float64Array(n).fill(1); let lam=1;
   for(let it=0;it<12;it++){const w=new Float64Array(n);
     for(let i=0;i<n;i++){let a=0;for(let j=0;j<n;j++)a+=W[i*n+j]*v[j];w[i]=a;}
@@ -242,7 +265,6 @@ function fresh(){
   const {W,pos,edges}=buildGraph(n,type,dens,seed);
   const rng=mulberry32(seed^0x9e3779b9);
   const x=new Float64Array(n); for(let i=0;i<n;i++)x[i]=0.01*gauss(rng);
-  // reference: best over several local-search restarts
   let ref=0;
   for(let r=0;r<40;r++){const rs=new Float64Array(n);
     for(let i=0;i<n;i++)rs[i]=rng()<0.5?1:-1;
@@ -258,7 +280,7 @@ function stepCIM(S,k){
   const {n,W,x,rng,coupling}=S;
   const dt=0.05, noise=+el.noise.value, ns=Math.sqrt(2*noise*dt);
   for(let s=0;s<k && S.step<S.totalSteps;s++){
-    const p=-2+3*(S.step/S.totalSteps);         // pump ramp -2 -> 1
+    const p=-2+3*(S.step/S.totalSteps);
     const field=new Float64Array(n);
     for(let i=0;i<n;i++){let a=0;for(let j=0;j<n;j++)a+=W[i*n+j]*x[j];field[i]=a;}
     for(let i=0;i<n;i++){
@@ -278,7 +300,7 @@ const el={}; ["graph","trace","n","nval","gtype","noise","noiseval","dens","dens
   "run","post","reset","phase","m-cut","m-best","m-pct","m-step","m-ref"].forEach(id=>el[id]=document.getElementById(id));
 const gc=el.graph.getContext("2d"), tc=el.trace.getContext("2d");
 function fit(cv){const r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;
-  const tw=Math.round(r.width*dpr), th=Math.round((cv===el.graph?r.width*0.82:r.width*0.4)*dpr);
+  const tw=Math.round(r.width*dpr), th=Math.round((cv===el.graph?r.width*0.82:r.width*0.48)*dpr);
   if(cv.width!==tw||cv.height!==th){cv.width=tw;cv.height=th;}
   const ctx=cv.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);
   return {w:cv.width/dpr,h:cv.height/dpr};}
@@ -286,44 +308,61 @@ function fit(cv){const r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;
 function drawGraph(S){
   const {w,h}=fit(el.graph); gc.clearRect(0,0,w,h);
   const X=p=>16+p.x*(w-32), Y=p=>16+p.y*(h-32);
-  const s=S.spins;
-  // edges: cut edges lit, uncut dim
+  const s=S.spins, fg=css("--fg"), line=css("--line"), c1=css("--c1"), c2=css("--c2");
+  // edges: cut edges solid fg, uncut faint
   for(const e of S.edges){
     const cut = s[e.i]!==s[e.j];
     const a=S.pos[e.i], b=S.pos[e.j];
     gc.beginPath();gc.moveTo(X(a),Y(a));gc.lineTo(X(b),Y(b));
-    if(cut){gc.strokeStyle="rgba(242,247,255,0.85)";gc.lineWidth=1.4;
-      gc.shadowColor="rgba(120,190,255,0.9)";gc.shadowBlur=8;}
-    else{gc.strokeStyle="rgba(70,90,130,0.22)";gc.lineWidth=1;gc.shadowBlur=0;}
+    if(cut){gc.strokeStyle=fg;gc.lineWidth=1.4;gc.globalAlpha=1;}
+    else{gc.strokeStyle=line;gc.lineWidth=1;gc.globalAlpha=.7;}
     gc.stroke();
   }
-  gc.shadowBlur=0;
-  // nodes
+  gc.globalAlpha=1;
+  // nodes: spin +1 vs -1 in two simple colours
+  const rad=Math.max(4.5,10-S.n/8);
   for(let i=0;i<S.n;i++){const p=S.pos[i],up=s[i]>0;
-    gc.beginPath();gc.arc(X(p),Y(p),Math.max(5,10-S.n/8),0,7);
-    gc.fillStyle=up?"#38bdf8":"#fbbf24";
-    gc.shadowColor=up?"rgba(56,189,248,.8)":"rgba(251,191,36,.7)";gc.shadowBlur=10;
-    gc.fill();gc.shadowBlur=0;}
+    gc.beginPath();gc.arc(X(p),Y(p),rad,0,7);
+    gc.fillStyle=up?c1:c2;gc.fill();
+  }
 }
+
 function drawTrace(S){
   const {w,h}=fit(el.trace); tc.clearRect(0,0,w,h);
-  const pad=8, x0=pad,x1=w-pad,y0=h-pad,y1=pad;
-  const ref=S.ref||1, maxx=S.totalSteps;
+  const fg=css("--fg"),dim=css("--dim"),line=css("--line"),c1=css("--c1");
+  const pad={l:44,r:10,t:10,b:26},x0=pad.l,x1=w-pad.r,y0=h-pad.b,y1=pad.t;
+  const ref=S.ref||1, maxY=ref*1.05, maxX=S.totalSteps;
+  const X=k=>x0+(x1-x0)*k/maxX, Y=v=>y0-(y0-y1)*v/maxY;
+  // y gridlines + ticks (cut value)
+  tc.font="10px "+css("--font");tc.fillStyle=dim;
+  for(const v of niceTicks(0,maxY,4)){const yy=Y(v);
+    tc.strokeStyle=line;tc.globalAlpha=.5;tc.beginPath();tc.moveTo(x0,yy);tc.lineTo(x1,yy);tc.stroke();
+    tc.globalAlpha=1;tc.textAlign="right";tc.fillText(Math.round(v),x0-6,yy+3);}
+  // x ticks (step)
+  tc.textAlign="center";
+  for(const v of niceTicks(0,maxX,4)){const xx=X(v);
+    tc.strokeStyle=line;tc.globalAlpha=.5;tc.beginPath();tc.moveTo(xx,y0);tc.lineTo(xx,y0+3);tc.stroke();
+    tc.globalAlpha=1;tc.fillText(Math.round(v),xx,y0+15);}
+  // axis
+  tc.strokeStyle=dim;tc.globalAlpha=1;tc.beginPath();
+  tc.moveTo(x0,y1);tc.lineTo(x0,y0);tc.lineTo(x1,y0);tc.stroke();
   // reference line
-  tc.strokeStyle="rgba(251,191,36,0.55)";tc.setLineDash([5,4]);tc.lineWidth=1;
-  tc.beginPath();tc.moveTo(x0,y1+2);tc.lineTo(x1,y1+2);tc.stroke();tc.setLineDash([]);
+  tc.strokeStyle=dim;tc.setLineDash([4,4]);tc.beginPath();
+  tc.moveTo(x0,Y(ref));tc.lineTo(x1,Y(ref));tc.stroke();tc.setLineDash([]);
+  tc.textAlign="right";tc.fillStyle=dim;tc.fillText("reference",x1,Y(ref)-4);
   // trace
   if(S.trace.length>1){
     tc.beginPath();
     for(let k=0;k<S.trace.length;k++){
-      const xx=x0+(x1-x0)*(k/Math.max(1,S.trace.length-1));
-      const yy=y0-(y0-y1-2)*Math.min(1,S.trace[k]/ref);
+      const xx=X(k*maxX/Math.max(1,S.trace.length-1)),yy=Y(Math.min(maxY,S.trace[k]));
       k?tc.lineTo(xx,yy):tc.moveTo(xx,yy);
     }
-    tc.strokeStyle="#38bdf8";tc.lineWidth=2;tc.shadowColor="rgba(56,189,248,.5)";
-    tc.shadowBlur=6;tc.stroke();tc.shadowBlur=0;
+    tc.strokeStyle=c1;tc.lineWidth=2;tc.stroke();
   }
+  // axis titles
+  tc.fillStyle=dim;tc.textAlign="center";tc.fillText("step",(x0+x1)/2,h-2);
 }
+
 function readouts(S){
   el["m-cut"].textContent=Math.round(S.spins?cutValue(S.W,S.n,S.spins):0);
   el["m-best"].textContent=Math.round(S.best);
@@ -349,7 +388,7 @@ function frame(){
 function newGraph(){state=fresh();el.phase.textContent="ready";el.post.disabled=true;
   el.run.textContent="Run machine";drawGraph(state);drawTrace(state);readouts(state);}
 
-function polish(){                       // animate greedy local search
+function polish(){
   const S=state; if(!S.done)return;
   let s=S.spins.slice(); el.phase.textContent="output layer";
   const tick=()=>{
@@ -371,7 +410,7 @@ el.gtype.onchange=newGraph;
 el.noise.oninput=()=>{el.noiseval.textContent=(+el.noise.value).toFixed(3);};
 el.reset.onclick=newGraph;
 el.run.onclick=()=>{
-  if(state.done) newGraph();       // finished run -> start a fresh one
+  if(state.done) newGraph();
   const S=state; S.running=!S.running;
   el.run.textContent=S.running?"Pause":"Run machine";
   el.phase.textContent=S.running?"annealing":"paused";
@@ -380,7 +419,6 @@ el.post.onclick=polish;
 
 newGraph();
 frame();
-// auto-run once as a hero moment unless the user prefers reduced motion
 if(!matchMedia("(prefers-reduced-motion: reduce)").matches){
   setTimeout(()=>{state.running=true;el.run.textContent="Pause";el.phase.textContent="annealing";},600);
 }

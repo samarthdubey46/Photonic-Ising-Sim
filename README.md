@@ -75,10 +75,13 @@ python scripts/demo.py        # full benchmark + two figures
 ## What's included
 
 ```
-ising_maxcut/      the library (graph, cim, baselines, postprocess, benchmark, plotting)
-scripts/demo.py    end-to-end benchmark + figures
-web/index.html     interactive browser demo (open directly or host on GitHub Pages)
-docs/              the write-up (photonic-ising-maxcut.pdf) and its LaTeX source
+ising_maxcut/        the library (graph, cim, baselines, postprocess, benchmark, plotting)
+scripts/demo.py      end-to-end benchmark + figures
+web/index.html       interactive browser demo (open directly or host on GitHub Pages)
+web/machine3d.html   3D hardware walkthrough: watch the laser pulse loop through the
+                     TFLN PIC → SOA → PD → ADC/DSP/DAC while the real CIM dynamics
+                     solve Max-Cut live (three.js from CDN, no build step)
+docs/                the write-up (photonic-ising-maxcut.pdf) and its LaTeX source
 ```
 
 The web demo runs the same CIM + Max-Cut + local search in JavaScript: watch the

@@ -1,4 +1,4 @@
-"""Quickstart demo. Run:  python scripts/demo.py
+"""Quickstart demo. Run:  python demo.py
 
 Part A: a small graph with a known exact optimum (brute force), so success
         probability and time-to-solution are exact.
@@ -7,11 +7,8 @@ Part B: a larger graph scored as % of best-known, the way Gset benchmarking
 """
 
 import os
-import sys
 
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ising_maxcut import (
     random_graph, planted_bisection, brute_force_maxcut,
