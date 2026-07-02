@@ -10,6 +10,12 @@ Motivated by *"Programmable 200 GOPS Hopfield-inspired photonic Ising machine"*
 or optoelectronic loop. It models the *computation* the machine performs: an
 energy-minimising relaxation whose ground state is the maximum cut.
 
+**Live demo: https://samarthdubey46.github.io/Photonic-Ising-Sim/**
+
+| [Home](https://samarthdubey46.github.io/Photonic-Ising-Sim/index.html) | [Benchmark lab](https://samarthdubey46.github.io/Photonic-Ising-Sim/benchmark.html) | [3D machine walkthrough](https://samarthdubey46.github.io/Photonic-Ising-Sim/machine3d.html) |
+|:---:|:---:|:---:|
+| [![Home page](docs/screenshots/home.png)](https://samarthdubey46.github.io/Photonic-Ising-Sim/index.html) | [![Benchmark lab](docs/screenshots/benchmark.png)](https://samarthdubey46.github.io/Photonic-Ising-Sim/benchmark.html) | [![3D machine walkthrough](docs/screenshots/machine3d.png)](https://samarthdubey46.github.io/Photonic-Ising-Sim/machine3d.html) |
+
 ## The bridge from problem to physics
 
 Max-Cut: split a graph's vertices into two sides so the weight of edges
